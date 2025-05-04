@@ -4,12 +4,13 @@ local playerSettings = {
     url = Config.DefaultCrosshair,
     size = Config.Settings.crosshairSize,
     opacity = Config.Settings.crosshairOpacity,
-    rotation = Config.Settings.crosshairRotation,
-    color = Config.Settings.crosshairColor
+    rotation = Config.Settings.crosshairRotation
 }
 
+local savedSettings = nil
+local isCrosshairEnabled = true
+
 Citizen.CreateThread(function()
-    -- Wait for the player to be ready
     while not NetworkIsPlayerActive(PlayerId()) do
         Citizen.Wait(100)
     end
@@ -24,13 +25,8 @@ Citizen.CreateThread(function()
 
     Citizen.Wait(1000) 
     setCrosshairVisibility(true)
-
-    if Config.Debug then
-        print("[Crosshair] Client initialized")
-    end
 end)
 
--- Toggle the crosshair menu
 function toggleCrosshairMenu()
     if isMenuOpen then
         closeCrosshairMenu()
@@ -48,16 +44,16 @@ function openCrosshairMenu()
     isMenuOpen = true
     SetNuiFocus(true, true)
 
+    if savedSettings then
+        playerSettings = deepCopy(savedSettings)
+    end
+
     SendNUIMessage({
         action = "openMenu",
         url = playerSettings.url,
         settings = playerSettings,
         presets = Config.Presets
     })
-
-    if Config.Debug then
-        print("[Crosshair] Menu opened")
-    end
 end
 
 function closeCrosshairMenu()
@@ -65,33 +61,39 @@ function closeCrosshairMenu()
     SetNuiFocus(false, false)
     SendNUIMessage({ action = "closeMenu" })
 
-    if Config.Debug then
-        print("[Crosshair] Menu closed")
+    savedSettings = deepCopy(playerSettings)
+end
+
+function deepCopy(orig)
+    local orig_type = type(orig)
+    local copy
+    if orig_type == 'table' then
+        copy = {}
+        for orig_key, orig_value in pairs(orig) do
+            copy[orig_key] = deepCopy(orig_value)
+        end
+    else
+        copy = orig
     end
+    return copy
 end
 
 function setCrosshairVisibility(visible)
-    -- Debug için
-    if Config.Debug then
-        print("[Crosshair] Setting visibility:", visible, "URL:", playerSettings.url)
+    local shouldShow = visible
+    
+    if not isCrosshairEnabled then
+        shouldShow = false
     end
     
     SendNUIMessage({
         action = "showCrosshair",
         url = playerSettings.url,
-        visible = visible,
-        settings = playerSettings  -- Tüm ayarları gönder
+        visible = shouldShow,
+        settings = playerSettings
     })
-    
-    Citizen.Wait(50)
 end
 
 function updateCrosshairSettings(settings)
-    -- Debug için
-    if Config.Debug then
-        print("[Crosshair] Updating settings with:", json.encode(settings))
-    end
-    
     for k, v in pairs(settings) do
         playerSettings[k] = v
     end
@@ -103,21 +105,21 @@ function updateCrosshairSettings(settings)
     SendNUIMessage({
         action = "showCrosshair",
         url = playerSettings.url,
-        visible = true,
+        visible = isCrosshairEnabled,
         settings = playerSettings
     })
 
     Citizen.Wait(50)
 
-    TriggerServerEvent('crosshair:saveSettings', playerSettings)
+    savedSettings = deepCopy(playerSettings)
 
-    if Config.Debug then
-        print("[Crosshair] Settings updated:", json.encode(playerSettings))
-    end
+    TriggerServerEvent('crosshair:saveSettings', playerSettings)
 end
 
 RegisterNUICallback('setCrosshair', function(data, cb)
     updateCrosshairSettings(data)
+
+    savedSettings = deepCopy(playerSettings)
     cb({})
 end)
 
@@ -128,8 +130,31 @@ end)
 
 RegisterNUICallback('saveSettings', function(data, cb)
     updateCrosshairSettings(data.settings)
+    savedSettings = deepCopy(playerSettings)
     cb({})
 end)
+
+RegisterCommand('crosskapat', function()
+    isCrosshairEnabled = false
+    setCrosshairVisibility(false)
+    TriggerEvent('chat:addMessage', {
+        color = {255, 0, 0},
+        multiline = true,
+        args = {"[Crosshair]", "Crosshair kapatıldı."}
+    })
+end, false)
+
+RegisterCommand('crossac', function()
+    isCrosshairEnabled = true
+    setCrosshairVisibility(true)
+    
+    -- Chat mesajı gönder
+    TriggerEvent('chat:addMessage', {
+        color = {0, 255, 0},
+        multiline = true,
+        args = {"[Crosshair]", "Crosshair açıldı."}
+    })
+end, false)
 
 RegisterNetEvent('crosshair:permissionGranted')
 AddEventHandler('crosshair:permissionGranted', function()
@@ -150,22 +175,19 @@ AddEventHandler('crosshair:loadSettings', function(settings)
     if settings then
         playerSettings = settings
         currentCrosshair = settings.url or Config.DefaultCrosshair
+        savedSettings = deepCopy(playerSettings)
     else
         playerSettings = {
             url = Config.DefaultCrosshair,
             size = Config.Settings.crosshairSize,
             opacity = Config.Settings.crosshairOpacity,
-            rotation = Config.Settings.crosshairRotation,
-            color = Config.Settings.crosshairColor
+            rotation = Config.Settings.crosshairRotation
         }
         currentCrosshair = Config.DefaultCrosshair
+        savedSettings = deepCopy(playerSettings)
     end
 
     setCrosshairVisibility(true)
-
-    if Config.Debug then
-        print("[Crosshair] Settings loaded:", json.encode(settings))
-    end
 end)
 
 Citizen.CreateThread(function()
@@ -173,10 +195,15 @@ Citizen.CreateThread(function()
         Citizen.Wait(500)
         
         local playerPed = PlayerPedId()
+        local shouldShowCrosshair = true
+
         if IsPlayerDead(PlayerId()) or IsPedInAnyVehicle(playerPed, false) or IsPauseMenuActive() then
-            setCrosshairVisibility(false)
-        else
-            setCrosshairVisibility(true)
+            shouldShowCrosshair = false
         end
+        if not isCrosshairEnabled then
+            shouldShowCrosshair = false
+        end
+        
+        setCrosshairVisibility(shouldShowCrosshair)
     end
 end)

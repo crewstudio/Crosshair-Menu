@@ -3,7 +3,7 @@ game 'gta5'
 
 name 'Crew Studio - Crosshair Menu'
 author 'crewstudio'
-description 'Advanced crosshair customization for FiveM'
+description 'CrosshairMenu'
 version '1.0.0'
 
 ui_page 'html/ui.html'

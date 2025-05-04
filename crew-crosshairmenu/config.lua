@@ -44,11 +44,9 @@ Config.Presets = {
     }
 }
 
--- Player settings that will be saved
 Config.Settings = {
     crosshairUrl = Config.DefaultCrosshair,
     crosshairSize = 32,
     crosshairOpacity = 100,
-    crosshairRotation = 0,
-    crosshairColor = "#ffffff"
+    crosshairRotation = 0
 }
